@@ -20,7 +20,7 @@ const features = [
   {
     icon: Zap,
     title: "Instant Transactions",
-    description: "Built on Base for fast, low-cost transactions. Deposit and withdraw in seconds.",
+    description: "Built on Lisk for fast, low-cost transactions. Deposit and withdraw in seconds.",
   },
 ];
 
