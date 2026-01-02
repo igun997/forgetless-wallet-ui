@@ -30,12 +30,22 @@ function TransactionRow({ tx }: { tx: Transaction }) {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
 
+  const formatAmount = (amount: string) => {
+    const num = parseFloat(amount);
+    if (num === 0) return "0";
+    if (num < 0.0001) return "<0.0001";
+    if (num < 1) return num.toFixed(4);
+    if (num < 1000) return num.toFixed(2);
+    return num.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  };
+
   return (
-    <div className="flex items-center justify-between rounded-lg p-4 transition-colors hover:bg-muted/20">
-      <div className="flex items-center gap-4">
+    <div className="flex flex-col gap-3 rounded-lg p-3 transition-colors hover:bg-muted/20 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-4">
+      {/* Left: Icon + Details */}
+      <div className="flex items-start gap-3 sm:items-center">
         <div
           className={cn(
-            "flex h-10 w-10 items-center justify-center rounded-full",
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
             isDeposit ? "bg-emerald-500/10" : "bg-chart-1/10"
           )}
         >
@@ -45,38 +55,39 @@ function TransactionRow({ tx }: { tx: Transaction }) {
             <ArrowUpRight className="text-chart-1 h-5 w-5" />
           )}
         </div>
-        <div>
-          <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1 sm:gap-2">
             <span className="font-medium text-foreground">{isDeposit ? "Received" : "Sent"}</span>
-            <span className="font-semibold text-foreground">{tx.amount}</span>
+            <span className="truncate font-semibold text-foreground">
+              {formatAmount(tx.amount)}
+            </span>
             <span className="text-muted-foreground">{tx.asset}</span>
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>
-              {isDeposit
-                ? `From: ${truncateAddress(tx.address)}`
-                : `To: ${truncateAddress(tx.address)}`}
-            </span>
-          </div>
+          <p className="truncate text-sm text-muted-foreground">
+            {isDeposit ? "From: " : "To: "}
+            {truncateAddress(tx.address)}
+          </p>
         </div>
       </div>
-      <div className="flex items-center gap-4">
-        <div className="text-right">
+
+      {/* Right: Status + Time + Link */}
+      <div className="pl-13 flex items-center justify-between gap-3 sm:justify-end sm:gap-4 sm:pl-0">
+        <div className="flex items-center gap-2 sm:flex-col sm:items-end sm:gap-1">
           <Badge
             variant="default"
             className="bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
           >
             Confirmed
           </Badge>
-          <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
             <Clock className="h-3 w-3" />
             {timeAgo}
-          </p>
+          </span>
         </div>
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8"
+          className="h-8 w-8 shrink-0"
           onClick={() => window.open(getExplorerUrl(tx.txHash), "_blank")}
         >
           <ExternalLink className="h-4 w-4" />
@@ -135,22 +146,40 @@ export default function History() {
         </div>
 
         <Card className="border-border/50">
-          <CardHeader className="pb-0">
+          <CardHeader className="px-3 pb-0 sm:px-6">
             <Tabs defaultValue="all" className="w-full">
               <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="all" onClick={() => setFilter("all")}>
-                  All ({totalCount})
+                <TabsTrigger
+                  value="all"
+                  onClick={() => setFilter("all")}
+                  className="text-xs sm:text-sm"
+                >
+                  <span className="sm:hidden">All</span>
+                  <span className="hidden sm:inline">All</span>
+                  <span className="ml-1">({totalCount})</span>
                 </TabsTrigger>
-                <TabsTrigger value="deposits" onClick={() => setFilter("deposits")}>
-                  Deposits ({depositCount})
+                <TabsTrigger
+                  value="deposits"
+                  onClick={() => setFilter("deposits")}
+                  className="text-xs sm:text-sm"
+                >
+                  <span className="sm:hidden">In</span>
+                  <span className="hidden sm:inline">Deposits</span>
+                  <span className="ml-1">({depositCount})</span>
                 </TabsTrigger>
-                <TabsTrigger value="withdrawals" onClick={() => setFilter("withdrawals")}>
-                  Withdrawals ({withdrawalCount})
+                <TabsTrigger
+                  value="withdrawals"
+                  onClick={() => setFilter("withdrawals")}
+                  className="text-xs sm:text-sm"
+                >
+                  <span className="sm:hidden">Out</span>
+                  <span className="hidden sm:inline">Withdrawals</span>
+                  <span className="ml-1">({withdrawalCount})</span>
                 </TabsTrigger>
               </TabsList>
             </Tabs>
           </CardHeader>
-          <CardContent className="pt-4">
+          <CardContent className="px-2 pt-4 sm:px-6">
             {isLoading ? (
               <div className="flex h-48 items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />

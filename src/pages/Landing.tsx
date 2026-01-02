@@ -1,7 +1,9 @@
-import { Link } from "react-router-dom";
+import { useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Fingerprint, Shield, Zap, ArrowRight, Lock, Globe, Smartphone } from "lucide-react";
+import { useWalletSession } from "@/hooks/use-wallet-session";
 
 const features = [
   {
@@ -41,6 +43,16 @@ const benefits = [
 ];
 
 export default function Landing() {
+  const navigate = useNavigate();
+  const { isConnected, isLoading } = useWalletSession();
+
+  // Redirect to dashboard if already logged in
+  useEffect(() => {
+    if (!isLoading && isConnected) {
+      navigate("/dashboard");
+    }
+  }, [isLoading, isConnected, navigate]);
+
   return (
     <div className="flex min-h-screen flex-col">
       {/* Hero Section */}
