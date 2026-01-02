@@ -1,75 +1,100 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { AddressInput } from "@/components/wallet/AddressInput";
 import { AmountInput } from "@/components/wallet/AmountInput";
 import { TokenSelector } from "@/components/wallet/TokenSelector";
 import { TransactionStatus } from "@/components/wallet/TransactionStatus";
-import { ArrowDownLeft, AlertCircle, CheckCircle2 } from "lucide-react";
+import { ArrowDownLeft, Wallet, Loader2 } from "lucide-react";
 import { SUPPORTED_TOKENS, type Token, CURRENT_NETWORK } from "@/lib/constants";
 import { toast } from "sonner";
-import { useIsUserRegistered } from "@/hooks/use-contract-read";
 import { useDepositETH, useDepositToken } from "@/hooks/use-deposit";
+import { useWalletTokens } from "@/hooks/use-wallet-tokens";
+import { useWalletSession } from "@/hooks/use-wallet-session";
 
 export default function Deposit() {
-  const [credentialId, setCredentialId] = useState("");
+  const navigate = useNavigate();
+  const { session, isLoading: sessionLoading, isConnected } = useWalletSession();
   const [ethAmount, setEthAmount] = useState("");
   const [tokenAmount, setTokenAmount] = useState("");
-  const [selectedToken, setSelectedToken] = useState<Token | { address: string; symbol: string }>(
-    SUPPORTED_TOKENS[1] // USDC default
-  );
+  const [selectedToken, setSelectedToken] = useState<Token>(SUPPORTED_TOKENS[1]);
 
-  const credentialIdHex = credentialId.startsWith("0x")
-    ? (credentialId as `0x${string}`)
-    : undefined;
-
-  const { data: isRegistered, isLoading: isValidating } = useIsUserRegistered(
-    credentialIdHex && credentialId.length >= 66 ? credentialIdHex : undefined
-  );
+  const { data: walletBalances } = useWalletTokens();
 
   const depositETHMutation = useDepositETH();
   const depositTokenMutation = useDepositToken();
 
-  const credentialValid = credentialIdHex && credentialId.length === 66 ? isRegistered : null;
   const isProcessing = depositETHMutation.isPending || depositTokenMutation.isPending;
 
-  const handleCredentialChange = (value: string) => {
-    setCredentialId(value);
+  // Redirect if not connected
+  useEffect(() => {
+    if (!sessionLoading && !isConnected) {
+      navigate("/register");
+    }
+  }, [sessionLoading, isConnected, navigate]);
+
+  const getWalletBalance = (address: string) => {
+    const balance = walletBalances?.find(
+      (b) => b.token.address.toLowerCase() === address.toLowerCase()
+    );
+    return balance ? balance.balance : "0";
   };
 
+  const ethBalance = getWalletBalance("0x0000000000000000000000000000000000000000");
+  const tokenBalance = getWalletBalance(selectedToken.address);
+
+  const isEthAmountValid =
+    ethAmount && parseFloat(ethAmount) > 0 && parseFloat(ethAmount) <= parseFloat(ethBalance);
+  const isTokenAmountValid =
+    tokenAmount &&
+    parseFloat(tokenAmount) > 0 &&
+    parseFloat(tokenAmount) <= parseFloat(tokenBalance);
+
   const handleDepositETH = () => {
-    if (!credentialValid || !credentialIdHex) {
-      toast.error("Invalid Credential", { description: "Please enter a valid credential ID" });
+    if (!session?.credentialIdHex) {
+      toast.error("Not connected", { description: "Please register first" });
       return;
     }
     if (!ethAmount || parseFloat(ethAmount) <= 0) {
       toast.error("Invalid Amount", { description: "Please enter a valid amount" });
       return;
     }
+    if (parseFloat(ethAmount) > parseFloat(ethBalance)) {
+      toast.error("Insufficient Balance", {
+        description: `You only have ${parseFloat(ethBalance).toFixed(4)} ETH`,
+      });
+      return;
+    }
 
-    depositETHMutation.mutate({ credentialIdHex, amount: ethAmount });
+    depositETHMutation.mutate({
+      credentialIdHex: session.credentialIdHex as `0x${string}`,
+      amount: ethAmount,
+    });
   };
 
   const handleDepositToken = () => {
-    if (!credentialValid || !credentialIdHex) {
-      toast.error("Invalid Credential", { description: "Please enter a valid credential ID" });
+    if (!session?.credentialIdHex) {
+      toast.error("Not connected", { description: "Please register first" });
       return;
     }
     if (!tokenAmount || parseFloat(tokenAmount) <= 0) {
       toast.error("Invalid Amount", { description: "Please enter a valid amount" });
       return;
     }
-
-    const tokenAddress = ("address" in selectedToken ? selectedToken.address : "") as `0x${string}`;
-    const decimals = "decimals" in selectedToken ? selectedToken.decimals : 18;
+    if (parseFloat(tokenAmount) > parseFloat(tokenBalance)) {
+      toast.error("Insufficient Balance", {
+        description: `You only have ${parseFloat(tokenBalance).toFixed(4)} ${selectedToken.symbol}`,
+      });
+      return;
+    }
 
     depositTokenMutation.mutate({
-      credentialIdHex,
-      tokenAddress,
+      credentialIdHex: session.credentialIdHex as `0x${string}`,
+      tokenAddress: selectedToken.address,
       amount: tokenAmount,
-      decimals,
+      decimals: selectedToken.decimals,
     });
   };
 
@@ -80,6 +105,16 @@ export default function Deposit() {
     setTokenAmount("");
   };
 
+  if (sessionLoading) {
+    return (
+      <PageContainer maxWidth="md">
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </PageContainer>
+    );
+  }
+
   return (
     <PageContainer maxWidth="md">
       <div className="space-y-6">
@@ -88,46 +123,8 @@ export default function Deposit() {
             <ArrowDownLeft className="h-6 w-6 text-primary" />
             Deposit Funds
           </h1>
-          <p className="mt-1 text-muted-foreground">
-            Send ETH or tokens to any registered credential
-          </p>
+          <p className="mt-1 text-muted-foreground">Deposit ETH or tokens to your wallet</p>
         </div>
-
-        <Card className="border-border/50">
-          <CardHeader>
-            <CardTitle className="text-lg">Recipient Credential</CardTitle>
-            <CardDescription>
-              Enter the credential ID of the wallet you want to deposit to
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="relative">
-              <AddressInput
-                value={credentialId}
-                onChange={handleCredentialChange}
-                label=""
-                placeholder="0x..."
-              />
-              {credentialId.length >= 66 && (
-                <div className="mt-2 flex items-center gap-2 text-sm">
-                  {isValidating ? (
-                    <span className="text-muted-foreground">Checking...</span>
-                  ) : credentialValid ? (
-                    <>
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                      <span className="text-emerald-500">Credential is registered</span>
-                    </>
-                  ) : credentialValid === false ? (
-                    <>
-                      <AlertCircle className="h-4 w-4 text-destructive" />
-                      <span className="text-destructive">Credential not found</span>
-                    </>
-                  ) : null}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
 
         <Card className="border-border/50">
           <CardContent className="p-0">
@@ -142,21 +139,33 @@ export default function Deposit() {
               </TabsList>
 
               <div className="p-6">
-                <TabsContent value="eth" className="mt-0 space-y-6">
+                <TabsContent value="eth" className="mt-0 space-y-4">
                   {!isProcessing && !depositETHMutation.isSuccess ? (
                     <>
+                      <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2 text-sm">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Wallet className="h-4 w-4" />
+                          <span>Your Wallet</span>
+                        </div>
+                        <span className="font-medium">{parseFloat(ethBalance).toFixed(4)} ETH</span>
+                      </div>
                       <AmountInput
                         value={ethAmount}
                         onChange={setEthAmount}
-                        maxAmount="10.0"
+                        maxAmount={ethBalance}
                         symbol="ETH"
-                        label="Amount"
+                        label="Amount to Deposit"
+                        error={
+                          ethAmount && parseFloat(ethAmount) > parseFloat(ethBalance)
+                            ? "Insufficient balance"
+                            : undefined
+                        }
                       />
                       <Button
                         className="w-full"
                         size="lg"
                         onClick={handleDepositETH}
-                        disabled={!credentialValid || !ethAmount || isProcessing}
+                        disabled={!isEthAmountValid || isProcessing}
                       >
                         Deposit ETH
                       </Button>
@@ -191,25 +200,39 @@ export default function Deposit() {
                   )}
                 </TabsContent>
 
-                <TabsContent value="token" className="mt-0 space-y-6">
+                <TabsContent value="token" className="mt-0 space-y-4">
                   {!isProcessing && !depositTokenMutation.isSuccess ? (
                     <>
                       <TokenSelector
-                        value={"address" in selectedToken ? selectedToken.address : ""}
+                        value={selectedToken.address}
                         onChange={setSelectedToken}
                         label="Select Token"
                       />
+                      <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2 text-sm">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Wallet className="h-4 w-4" />
+                          <span>Your Wallet</span>
+                        </div>
+                        <span className="font-medium">
+                          {parseFloat(tokenBalance).toFixed(4)} {selectedToken.symbol}
+                        </span>
+                      </div>
                       <AmountInput
                         value={tokenAmount}
                         onChange={setTokenAmount}
-                        maxAmount="1000.00"
+                        maxAmount={tokenBalance}
                         symbol={selectedToken.symbol}
-                        label="Amount"
+                        label="Amount to Deposit"
+                        error={
+                          tokenAmount && parseFloat(tokenAmount) > parseFloat(tokenBalance)
+                            ? "Insufficient balance"
+                            : undefined
+                        }
                       />
                       <Button
                         className="w-full"
                         onClick={handleDepositToken}
-                        disabled={!credentialValid || !tokenAmount || isProcessing}
+                        disabled={!isTokenAmountValid || isProcessing}
                       >
                         Deposit {selectedToken.symbol}
                       </Button>

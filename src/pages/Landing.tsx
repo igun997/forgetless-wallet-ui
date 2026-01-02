@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { NetworkBadge } from "@/components/wallet/NetworkBadge";
 import { Fingerprint, Shield, Zap, ArrowRight, Lock, Globe, Smartphone } from "lucide-react";
 
 const features = [
@@ -47,9 +46,6 @@ export default function Landing() {
       {/* Hero Section */}
       <section className="flex flex-1 items-center justify-center px-4 py-16 md:py-24">
         <div className="container max-w-5xl text-center">
-          <div className="mb-6 flex justify-center">
-            <NetworkBadge network="baseSepolia" />
-          </div>
           <h1 className="mb-6 text-4xl font-bold leading-tight text-foreground md:text-6xl">
             Your Wallet,{" "}
             <span className="to-chart-1 bg-gradient-to-r from-primary bg-clip-text text-transparent">

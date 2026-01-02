@@ -40,6 +40,10 @@ export function useTransactionHistory(credentialIdHex: `0x${string}` | undefined
 
       const credentialIdHash = keccak256(credentialIdHex);
 
+      // Get current block and calculate fromBlock (max 99000 blocks back to stay under 100k limit)
+      const currentBlock = await publicClient.getBlockNumber();
+      const fromBlock = currentBlock > 99000n ? currentBlock - 99000n : 0n;
+
       // Fetch all event types
       const [ethDeposits, ethWithdrawals, tokenDeposits, tokenWithdrawals] = await Promise.all([
         publicClient.getLogs({
@@ -54,7 +58,7 @@ export function useTransactionHistory(credentialIdHex: `0x${string}` | undefined
             ],
           },
           args: { credentialIdHash },
-          fromBlock: "earliest",
+          fromBlock,
         }),
         publicClient.getLogs({
           address: contractAddress,
@@ -68,7 +72,7 @@ export function useTransactionHistory(credentialIdHex: `0x${string}` | undefined
             ],
           },
           args: { credentialIdHash },
-          fromBlock: "earliest",
+          fromBlock,
         }),
         publicClient.getLogs({
           address: contractAddress,
@@ -83,7 +87,7 @@ export function useTransactionHistory(credentialIdHex: `0x${string}` | undefined
             ],
           },
           args: { credentialIdHash },
-          fromBlock: "earliest",
+          fromBlock,
         }),
         publicClient.getLogs({
           address: contractAddress,
@@ -98,7 +102,7 @@ export function useTransactionHistory(credentialIdHex: `0x${string}` | undefined
             ],
           },
           args: { credentialIdHash },
-          fromBlock: "earliest",
+          fromBlock,
         }),
       ]);
 

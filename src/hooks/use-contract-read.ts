@@ -51,30 +51,54 @@ export function useTokenBalance(
   });
 }
 
-export function useAllBalances(credentialIdHex: `0x${string}` | undefined) {
+export function useAllBalances(
+  credentialIdHex: `0x${string}` | undefined,
+  additionalTokens: {
+    address: `0x${string}`;
+    symbol: string;
+    name: string;
+    decimals: number;
+  }[] = []
+) {
+  // Combine supported tokens with additional tokens, avoiding duplicates
+  const allTokens = [...SUPPORTED_TOKENS];
+  for (const token of additionalTokens) {
+    if (!allTokens.some((t) => t.address.toLowerCase() === token.address.toLowerCase())) {
+      allTokens.push(token);
+    }
+  }
+
   return useQuery({
-    queryKey: ["allBalances", credentialIdHex],
+    queryKey: ["allBalances", credentialIdHex, additionalTokens.map((t) => t.address)],
     queryFn: async () => {
       if (!credentialIdHex) return [];
 
       const balances = await Promise.all(
-        SUPPORTED_TOKENS.map(async (token) => {
-          if (token.address === "0x0000000000000000000000000000000000000000") {
-            const balance = await forgetlessWallet.read.getETHBalance([credentialIdHex]);
+        allTokens.map(async (token) => {
+          try {
+            if (token.address === "0x0000000000000000000000000000000000000000") {
+              const balance = await forgetlessWallet.read.getETHBalance([credentialIdHex]);
+              return {
+                ...token,
+                balance: balance,
+                formatted: formatEther(balance),
+              };
+            } else {
+              const balance = await forgetlessWallet.read.getTokenBalance([
+                credentialIdHex,
+                token.address,
+              ]);
+              return {
+                ...token,
+                balance: balance,
+                formatted: formatUnits(balance, token.decimals),
+              };
+            }
+          } catch {
             return {
               ...token,
-              balance: balance,
-              formatted: formatEther(balance),
-            };
-          } else {
-            const balance = await forgetlessWallet.read.getTokenBalance([
-              credentialIdHex,
-              token.address,
-            ]);
-            return {
-              ...token,
-              balance: balance,
-              formatted: formatUnits(balance, token.decimals),
+              balance: 0n,
+              formatted: "0",
             };
           }
         })

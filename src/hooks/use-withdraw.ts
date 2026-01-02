@@ -79,8 +79,17 @@ export function useWithdrawETH() {
         deadline,
       };
 
-      // Step 5: Encode and send transaction
+      // Step 5: Get connected account and encode transaction
       toast.loading("Confirm transaction in your wallet...", { id: "withdraw" });
+
+      const accounts = (await window.ethereum.request({
+        method: "eth_requestAccounts",
+      })) as string[];
+      if (!accounts || accounts.length === 0) {
+        throw new Error("No account connected");
+      }
+      const from = accounts[0];
+
       const data = encodeFunctionData({
         abi: FORGETLESS_WALLET_ABI,
         functionName: "withdrawETH",
@@ -91,6 +100,7 @@ export function useWithdrawETH() {
         method: "eth_sendTransaction",
         params: [
           {
+            from,
             to: contractAddress,
             data,
           },
@@ -183,8 +193,17 @@ export function useWithdrawToken() {
         deadline,
       };
 
-      // Step 5: Encode and send transaction
+      // Step 5: Get connected account and encode transaction
       toast.loading("Confirm transaction in your wallet...", { id: "withdraw" });
+
+      const accounts = (await window.ethereum.request({
+        method: "eth_requestAccounts",
+      })) as string[];
+      if (!accounts || accounts.length === 0) {
+        throw new Error("No account connected");
+      }
+      const from = accounts[0];
+
       const data = encodeFunctionData({
         abi: FORGETLESS_WALLET_ABI,
         functionName: "withdrawToken",
@@ -195,6 +214,7 @@ export function useWithdrawToken() {
         method: "eth_sendTransaction",
         params: [
           {
+            from,
             to: contractAddress,
             data,
           },

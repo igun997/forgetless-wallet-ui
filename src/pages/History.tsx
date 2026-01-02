@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { TokenIcon } from "@/components/wallet/TokenIcon";
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -49,7 +48,6 @@ function TransactionRow({ tx }: { tx: Transaction }) {
         <div>
           <div className="flex items-center gap-2">
             <span className="font-medium text-foreground">{isDeposit ? "Received" : "Sent"}</span>
-            <TokenIcon symbol={tx.asset} size="sm" />
             <span className="font-semibold text-foreground">{tx.amount}</span>
             <span className="text-muted-foreground">{tx.asset}</span>
           </div>

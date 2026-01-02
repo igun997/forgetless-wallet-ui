@@ -5,6 +5,7 @@ import { createPasskeyCredential } from "@/lib/webauthn/create";
 import { FORGETLESS_WALLET_ABI } from "@/lib/abi/ForgetlessWallet";
 import { contractAddress } from "@/lib/blockchain/config";
 import { publicClient } from "@/lib/blockchain/client";
+import { ensureCorrectNetwork } from "@/lib/blockchain/switchNetwork";
 import { useWalletSession } from "./use-wallet-session";
 import type { PasskeyCredential } from "@/lib/webauthn/types";
 
@@ -31,7 +32,19 @@ export function useRegister() {
         throw new Error("No wallet found. Please install MetaMask or another Web3 wallet.");
       }
 
-      // Step 3: Encode register call
+      // Step 3: Ensure correct network
+      await ensureCorrectNetwork();
+
+      // Step 4: Request account access
+      const accounts = (await window.ethereum.request({
+        method: "eth_requestAccounts",
+      })) as string[];
+
+      if (!accounts[0]) {
+        throw new Error("No account connected");
+      }
+
+      // Step 5: Encode register call
       toast.loading("Confirm transaction in your wallet...", { id: "register" });
       const data = encodeFunctionData({
         abi: FORGETLESS_WALLET_ABI,
@@ -39,20 +52,26 @@ export function useRegister() {
         args: [credential.credentialIdHex, credential.publicKeyX, credential.publicKeyY],
       });
 
-      // Step 4: Send transaction via wallet
+      // Step 6: Send transaction via wallet
       const txHash = (await window.ethereum.request({
         method: "eth_sendTransaction",
         params: [
           {
+            from: accounts[0],
             to: contractAddress,
             data,
           },
         ],
       })) as Hash;
 
-      // Step 5: Wait for confirmation
+      // Step 7: Wait for confirmation with timeout
       toast.loading("Waiting for confirmation...", { id: "register" });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+        timeout: 60_000, // 60 second timeout
+        pollingInterval: 2_000, // Poll every 2 seconds
+      });
 
       if (receipt.status === "reverted") {
         throw new Error("Registration transaction reverted");

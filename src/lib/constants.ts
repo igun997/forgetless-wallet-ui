@@ -19,8 +19,8 @@ export const NETWORKS = {
   },
 } as const;
 
-// Contract Addresses per Network
-export const CONTRACTS = {
+// Contract Addresses per Network (can be overridden by env var)
+const DEFAULT_CONTRACTS = {
   base: {
     forgetlessWallet: "0x0000000000000000000000000000000000000000" as `0x${string}`,
   },
@@ -28,6 +28,17 @@ export const CONTRACTS = {
     forgetlessWallet: "0xe28B90cb851c9bc144e3Ad0737310ABCF6f13c91" as `0x${string}`,
   },
 } as const;
+
+export const CONTRACTS = {
+  base: {
+    forgetlessWallet: (import.meta.env.VITE_CONTRACT_ADDRESS ||
+      DEFAULT_CONTRACTS.base.forgetlessWallet) as `0x${string}`,
+  },
+  baseSepolia: {
+    forgetlessWallet: (import.meta.env.VITE_CONTRACT_ADDRESS ||
+      DEFAULT_CONTRACTS.baseSepolia.forgetlessWallet) as `0x${string}`,
+  },
+};
 
 // Helper to check if testnet
 export const IS_TESTNET = ACTIVE_NETWORK === "baseSepolia";
@@ -64,7 +75,14 @@ export const SUPPORTED_TOKENS = [
   },
 ] as const;
 
-export type Token = (typeof SUPPORTED_TOKENS)[number];
+export type DefaultToken = (typeof SUPPORTED_TOKENS)[number];
+export type CustomToken = {
+  symbol: string;
+  name: string;
+  address: `0x${string}`;
+  decimals: number;
+};
+export type Token = DefaultToken | CustomToken;
 export type NetworkKey = keyof typeof NETWORKS;
 
 // Storage keys
@@ -72,4 +90,5 @@ export const STORAGE_KEYS = {
   session: "forgetless_session",
   credential: "forgetless_credential",
   displayName: "forgetless_displayName",
+  customTokens: "forgetless_customTokens",
 } as const;

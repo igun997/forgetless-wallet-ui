@@ -7,8 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { PageContainer } from "@/components/layout/PageContainer";
 import { TransactionStatus } from "@/components/wallet/TransactionStatus";
 import { CredentialIdDisplay } from "@/components/wallet/CredentialIdDisplay";
-import { Fingerprint, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Fingerprint, ArrowRight, CheckCircle2, LogIn } from "lucide-react";
 import { useRegister } from "@/hooks/use-register";
+import { useLogin } from "@/hooks/use-login";
 import { useWalletSession } from "@/hooks/use-wallet-session";
 
 export default function Register() {
@@ -17,13 +18,25 @@ export default function Register() {
   const [error, setError] = useState("");
   const { session, isConnected } = useWalletSession();
   const registerMutation = useRegister();
+  const loginMutation = useLogin();
 
-  // Redirect if already registered
+  // Redirect if already connected on mount
   useEffect(() => {
-    if (isConnected) {
+    if (isConnected && !registerMutation.isPending && !loginMutation.isPending) {
       navigate("/dashboard");
     }
-  }, [isConnected, navigate]);
+  }, [isConnected, navigate, registerMutation.isPending, loginMutation.isPending]);
+
+  // Auto-redirect after successful login/register (with brief delay to show success message)
+  const isSuccess = registerMutation.isSuccess || loginMutation.isSuccess;
+  useEffect(() => {
+    if (isSuccess && session) {
+      const timer = setTimeout(() => {
+        navigate("/dashboard");
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [isSuccess, session, navigate]);
 
   const handleCreatePasskey = () => {
     if (!displayName.trim()) {
@@ -34,12 +47,15 @@ export default function Register() {
     registerMutation.mutate(displayName);
   };
 
+  const handleLogin = () => {
+    loginMutation.mutate();
+  };
+
   const handleContinue = () => {
     navigate("/dashboard");
   };
 
-  const isSuccess = registerMutation.isSuccess;
-  const isPending = registerMutation.isPending;
+  const isPending = registerMutation.isPending || loginMutation.isPending;
 
   return (
     <PageContainer maxWidth="sm">
@@ -103,11 +119,40 @@ export default function Register() {
                 <Fingerprint className="h-5 w-5" />
                 Create Passkey
               </Button>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    Already have a wallet?
+                  </span>
+                </div>
+              </div>
+
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                size="lg"
+                onClick={handleLogin}
+                disabled={isPending}
+              >
+                <LogIn className="h-5 w-5" />
+                Login with Passkey
+              </Button>
             </>
           )}
 
           {isPending && (
-            <TransactionStatus status="loading" message="Creating and registering your wallet..." />
+            <TransactionStatus
+              status="loading"
+              message={
+                registerMutation.isPending
+                  ? "Creating and registering your wallet..."
+                  : "Authenticating with your passkey..."
+              }
+            />
           )}
 
           {isSuccess && session && (
@@ -118,10 +163,12 @@ export default function Register() {
                 </div>
                 <div className="text-center">
                   <h3 className="text-lg font-semibold text-foreground">
-                    Wallet Created Successfully!
+                    {registerMutation.isSuccess ? "Wallet Created Successfully!" : "Welcome Back!"}
                   </h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Your passkey has been registered on-chain
+                    {registerMutation.isSuccess
+                      ? "Your passkey has been registered on-chain"
+                      : "You have been logged in successfully"}
                   </p>
                 </div>
               </div>

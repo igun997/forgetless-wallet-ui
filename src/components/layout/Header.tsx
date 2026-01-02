@@ -1,8 +1,8 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { NetworkBadge } from "@/components/wallet/NetworkBadge";
-import { Menu, X, Wallet, BookOpen } from "lucide-react";
+import { Menu, X, Wallet, BookOpen, LogOut } from "lucide-react";
 import { useState } from "react";
+import { useWalletSession } from "@/hooks/use-wallet-session";
 
 const navItems = [
   { path: "/dashboard", label: "Dashboard" },
@@ -14,7 +14,14 @@ const navItems = [
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { isConnected, clearSession } = useWalletSession();
   const isLanding = location.pathname === "/";
+
+  const handleLogout = () => {
+    clearSession();
+    navigate("/");
+  };
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -38,13 +45,23 @@ export function Header() {
           </nav>
         )}
 
-        <div className="flex items-center gap-3">
-          <NetworkBadge network="baseSepolia" className="hidden sm:flex" />
+        <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" asChild className="hidden sm:flex">
             <a href="https://docs.forgetless.wallet" target="_blank" rel="noopener noreferrer">
               <BookOpen className="h-4 w-4" />
             </a>
           </Button>
+          {isConnected && !isLanding && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLogout}
+              className="hidden gap-2 border-border/50 text-muted-foreground hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive sm:flex"
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </Button>
+          )}
           {!isLanding && (
             <Button
               variant="ghost"
@@ -72,9 +89,19 @@ export function Header() {
                 </Button>
               </Link>
             ))}
-            <div className="mt-2 border-t border-border pt-2">
-              <NetworkBadge network="baseSepolia" />
-            </div>
+            {isConnected && (
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  handleLogout();
+                }}
+                className="w-full justify-start gap-2 text-muted-foreground hover:text-destructive"
+              >
+                <LogOut className="h-4 w-4" />
+                Logout
+              </Button>
+            )}
           </nav>
         </div>
       )}

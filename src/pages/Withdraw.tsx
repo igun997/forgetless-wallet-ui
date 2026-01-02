@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { useWalletSession } from "@/hooks/use-wallet-session";
 import { useAllBalances, useUserNonce } from "@/hooks/use-contract-read";
 import { useWithdrawETH, useWithdrawToken } from "@/hooks/use-withdraw";
+import { useCustomTokens } from "@/hooks/use-custom-tokens";
 
 const DEADLINES = [
   { value: "3600", label: "1 hour" },
@@ -36,12 +37,14 @@ export default function Withdraw() {
     isConnected,
     getCredentialIdBytes,
   } = useWalletSession();
-  const { data: balances, isLoading: balancesLoading } = useAllBalances(session?.credentialIdHex);
+  const { customTokens } = useCustomTokens();
+  const { data: balances, isLoading: balancesLoading } = useAllBalances(
+    session?.credentialIdHex,
+    customTokens
+  );
   const { data: nonce } = useUserNonce(session?.credentialIdHex);
 
-  const [selectedToken, setSelectedToken] = useState<Token | { address: string; symbol: string }>(
-    SUPPORTED_TOKENS[0] // ETH default
-  );
+  const [selectedToken, setSelectedToken] = useState<Token>(SUPPORTED_TOKENS[0]);
   const [amount, setAmount] = useState("");
   const [recipient, setRecipient] = useState("");
   const [deadline, setDeadline] = useState("3600");
@@ -56,7 +59,25 @@ export default function Withdraw() {
     }
   }, [sessionLoading, isConnected, navigate]);
 
-  const tokenAddress = "address" in selectedToken ? selectedToken.address : "";
+  // Prefill recipient with connected wallet address
+  useEffect(() => {
+    const getAccount = async () => {
+      if (!window.ethereum) return;
+      try {
+        const accounts = (await window.ethereum.request({
+          method: "eth_accounts",
+        })) as string[];
+        if (accounts && accounts.length > 0 && accounts[0]) {
+          setRecipient(accounts[0]);
+        }
+      } catch {
+        // Ignore errors
+      }
+    };
+    void getAccount();
+  }, []);
+
+  const tokenAddress = selectedToken.address;
   const isETH = tokenAddress === "0x0000000000000000000000000000000000000000";
 
   // Find balance for selected token
@@ -104,11 +125,10 @@ export default function Withdraw() {
     if (isETH) {
       withdrawETHMutation.mutate(commonParams);
     } else {
-      const decimals = "decimals" in selectedToken ? selectedToken.decimals : 18;
       withdrawTokenMutation.mutate({
         ...commonParams,
-        tokenAddress: tokenAddress as `0x${string}`,
-        decimals,
+        tokenAddress: tokenAddress,
+        decimals: selectedToken.decimals,
       });
     }
   };

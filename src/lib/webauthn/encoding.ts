@@ -1,4 +1,3 @@
-import { encodeAbiParameters } from "viem";
 import { bytesToHex } from "@/lib/blockchain/contract";
 
 // P-256 curve order for signature normalization
@@ -139,8 +138,8 @@ export function parseEcdsaSignature(signature: Uint8Array): { r: bigint; s: bigi
 }
 
 /**
- * Encode WebAuthn authentication data for the smart contract
- * Format: abi.encode(authenticatorData, clientDataJSON, r, s)
+ * Encode WebAuthn authentication data for the smart contract (Solady compact format)
+ * Format: [2 bytes authData length][authData][clientDataJSON][2 bytes challengeIndex][2 bytes typeIndex][32 bytes r][32 bytes s]
  */
 export function encodeAuthData(
   authenticatorData: Uint8Array,
@@ -148,11 +147,70 @@ export function encodeAuthData(
   r: bigint,
   s: bigint
 ): `0x${string}` {
-  const rHex = `0x${r.toString(16).padStart(64, "0")}` as `0x${string}`;
-  const sHex = `0x${s.toString(16).padStart(64, "0")}` as `0x${string}`;
+  // Find challengeIndex and typeIndex in clientDataJSON
+  const clientDataStr = new TextDecoder().decode(clientDataJSON);
+  const challengeIndex = clientDataStr.indexOf('"challenge":"');
+  const typeIndex = clientDataStr.indexOf('"type":"');
 
-  return encodeAbiParameters(
-    [{ type: "bytes" }, { type: "bytes" }, { type: "bytes32" }, { type: "bytes32" }],
-    [bytesToHex(authenticatorData), bytesToHex(clientDataJSON), rHex, sHex]
+  if (challengeIndex === -1 || typeIndex === -1) {
+    throw new Error("Invalid clientDataJSON: missing challenge or type");
+  }
+
+  // Build compact format
+  const authDataLen = authenticatorData.length;
+  const result = new Uint8Array(
+    2 + // authData length
+      authDataLen + // authData
+      clientDataJSON.length + // clientDataJSON
+      2 + // challengeIndex
+      2 + // typeIndex
+      32 + // r
+      32 // s
   );
+
+  let offset = 0;
+
+  // 2 bytes: authenticatorData length (big-endian)
+  result[offset++] = (authDataLen >> 8) & 0xff;
+  result[offset++] = authDataLen & 0xff;
+
+  // authenticatorData
+  result.set(authenticatorData, offset);
+  offset += authDataLen;
+
+  // clientDataJSON
+  result.set(clientDataJSON, offset);
+  offset += clientDataJSON.length;
+
+  // 2 bytes: challengeIndex (big-endian)
+  result[offset++] = (challengeIndex >> 8) & 0xff;
+  result[offset++] = challengeIndex & 0xff;
+
+  // 2 bytes: typeIndex (big-endian)
+  result[offset++] = (typeIndex >> 8) & 0xff;
+  result[offset++] = typeIndex & 0xff;
+
+  // 32 bytes: r (big-endian)
+  const rBytes = bigintToBytes32(r);
+  result.set(rBytes, offset);
+  offset += 32;
+
+  // 32 bytes: s (big-endian)
+  const sBytes = bigintToBytes32(s);
+  result.set(sBytes, offset);
+
+  return bytesToHex(result);
+}
+
+/**
+ * Convert a bigint to a 32-byte big-endian Uint8Array
+ */
+function bigintToBytes32(value: bigint): Uint8Array {
+  const bytes = new Uint8Array(32);
+  let temp = value;
+  for (let i = 31; i >= 0; i--) {
+    bytes[i] = Number(temp & 0xffn);
+    temp = temp >> 8n;
+  }
+  return bytes;
 }

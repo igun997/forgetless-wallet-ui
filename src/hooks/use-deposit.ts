@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { FORGETLESS_WALLET_ABI } from "@/lib/abi/ForgetlessWallet";
 import { contractAddress } from "@/lib/blockchain/config";
 import { publicClient } from "@/lib/blockchain/client";
+import { ensureCorrectNetwork } from "@/lib/blockchain/switchNetwork";
 
 declare global {
   interface Window {
@@ -25,7 +26,19 @@ export function useDepositETH() {
       amount: string;
     }) => {
       if (!window.ethereum) {
-        throw new Error("No wallet found");
+        throw new Error("No wallet found. Please install MetaMask.");
+      }
+
+      // Ensure correct network
+      await ensureCorrectNetwork();
+
+      // Request account access
+      const accounts = (await window.ethereum.request({
+        method: "eth_requestAccounts",
+      })) as string[];
+
+      if (!accounts[0]) {
+        throw new Error("No account connected");
       }
 
       toast.loading("Confirm deposit in your wallet...", { id: "deposit" });
@@ -42,6 +55,7 @@ export function useDepositETH() {
         method: "eth_sendTransaction",
         params: [
           {
+            from: accounts[0],
             to: contractAddress,
             data,
             value: `0x${value.toString(16)}`,
@@ -50,7 +64,11 @@ export function useDepositETH() {
       })) as Hash;
 
       toast.loading("Waiting for confirmation...", { id: "deposit" });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+        timeout: 60_000,
+        pollingInterval: 2_000,
+      });
 
       if (receipt.status === "reverted") {
         throw new Error("Deposit transaction reverted");
@@ -89,18 +107,22 @@ export function useDepositToken() {
       decimals: number;
     }) => {
       if (!window.ethereum) {
-        throw new Error("No wallet found");
+        throw new Error("No wallet found. Please install MetaMask.");
       }
 
-      const parsedAmount = parseUnits(amount, decimals);
+      // Ensure correct network
+      await ensureCorrectNetwork();
 
-      // Step 1: Check allowance
+      // Request account access
       const accounts = (await window.ethereum.request({
-        method: "eth_accounts",
+        method: "eth_requestAccounts",
       })) as string[];
+
       if (!accounts[0]) {
         throw new Error("No account connected");
       }
+
+      const parsedAmount = parseUnits(amount, decimals);
 
       const allowance = await publicClient.readContract({
         address: tokenAddress,
@@ -109,7 +131,7 @@ export function useDepositToken() {
         args: [accounts[0] as `0x${string}`, contractAddress],
       });
 
-      // Step 2: Approve if needed
+      // Step 1: Approve if needed
       if (allowance < parsedAmount) {
         toast.loading("Approve token spending...", { id: "deposit" });
 
@@ -123,16 +145,21 @@ export function useDepositToken() {
           method: "eth_sendTransaction",
           params: [
             {
+              from: accounts[0],
               to: tokenAddress,
               data: approveData,
             },
           ],
         })) as Hash;
 
-        await publicClient.waitForTransactionReceipt({ hash: approveTxHash });
+        await publicClient.waitForTransactionReceipt({
+          hash: approveTxHash,
+          timeout: 60_000,
+          pollingInterval: 2_000,
+        });
       }
 
-      // Step 3: Deposit token
+      // Step 2: Deposit token
       toast.loading("Confirm deposit in your wallet...", { id: "deposit" });
 
       const depositData = encodeFunctionData({
@@ -145,6 +172,7 @@ export function useDepositToken() {
         method: "eth_sendTransaction",
         params: [
           {
+            from: accounts[0],
             to: contractAddress,
             data: depositData,
           },
@@ -152,7 +180,11 @@ export function useDepositToken() {
       })) as Hash;
 
       toast.loading("Waiting for confirmation...", { id: "deposit" });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+        timeout: 60_000,
+        pollingInterval: 2_000,
+      });
 
       if (receipt.status === "reverted") {
         throw new Error("Token deposit transaction reverted");
