@@ -1,47 +1,47 @@
 // Active Network (controlled by environment variable)
-export const ACTIVE_NETWORK = (import.meta.env.VITE_NETWORK || "baseSepolia") as
-  | "base"
-  | "baseSepolia";
+export const ACTIVE_NETWORK = (import.meta.env.VITE_NETWORK || "liskSepolia") as
+  | "lisk"
+  | "liskSepolia";
 
 // Network Configuration
 export const NETWORKS = {
-  base: {
-    chainId: 8453,
-    name: "Base",
-    explorer: "https://basescan.org",
-    rpcUrl: "https://mainnet.base.org",
+  lisk: {
+    chainId: 1135,
+    name: "Lisk",
+    explorer: "https://blockscout.lisk.com",
+    rpcUrl: "https://rpc.api.lisk.com",
   },
-  baseSepolia: {
-    chainId: 84532,
-    name: "Base Sepolia",
-    explorer: "https://sepolia.basescan.org",
-    rpcUrl: "https://sepolia.base.org",
+  liskSepolia: {
+    chainId: 4202,
+    name: "Lisk Sepolia",
+    explorer: "https://sepolia-blockscout.lisk.com",
+    rpcUrl: "https://rpc.sepolia-api.lisk.com",
   },
 } as const;
 
 // Contract Addresses per Network (can be overridden by env var)
 const DEFAULT_CONTRACTS = {
-  base: {
+  lisk: {
     forgetlessWallet: "0x0000000000000000000000000000000000000000" as `0x${string}`,
   },
-  baseSepolia: {
-    forgetlessWallet: "0xe28B90cb851c9bc144e3Ad0737310ABCF6f13c91" as `0x${string}`,
+  liskSepolia: {
+    forgetlessWallet: "0xBd9F781727dc49a50D1CAB9a14ee1413b3c3A83E" as `0x${string}`,
   },
 } as const;
 
 export const CONTRACTS = {
-  base: {
+  lisk: {
     forgetlessWallet: (import.meta.env.VITE_CONTRACT_ADDRESS ||
-      DEFAULT_CONTRACTS.base.forgetlessWallet) as `0x${string}`,
+      DEFAULT_CONTRACTS.lisk.forgetlessWallet) as `0x${string}`,
   },
-  baseSepolia: {
+  liskSepolia: {
     forgetlessWallet: (import.meta.env.VITE_CONTRACT_ADDRESS ||
-      DEFAULT_CONTRACTS.baseSepolia.forgetlessWallet) as `0x${string}`,
+      DEFAULT_CONTRACTS.liskSepolia.forgetlessWallet) as `0x${string}`,
   },
 };
 
 // Helper to check if testnet
-export const IS_TESTNET = ACTIVE_NETWORK === "baseSepolia";
+export const IS_TESTNET = ACTIVE_NETWORK === "liskSepolia";
 
 // Current network config
 export const CURRENT_NETWORK = NETWORKS[ACTIVE_NETWORK];
