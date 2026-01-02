@@ -47,7 +47,7 @@ export const IS_TESTNET = ACTIVE_NETWORK === "liskSepolia";
 export const CURRENT_NETWORK = NETWORKS[ACTIVE_NETWORK];
 export const CONTRACT_ADDRESS = CONTRACTS[ACTIVE_NETWORK].forgetlessWallet;
 
-// Supported Tokens (Base Sepolia addresses)
+// Supported Tokens (Lisk Sepolia addresses)
 export const SUPPORTED_TOKENS = [
   {
     symbol: "ETH",
