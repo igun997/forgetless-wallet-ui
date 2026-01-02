@@ -9,7 +9,7 @@ export function Footer() {
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span>© 2025 Forgetless Wallet</span>
             <span className="hidden sm:inline">•</span>
-            <span className="hidden sm:inline">Powered by Base</span>
+            <span className="hidden sm:inline">Powered by Lisk</span>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" asChild>
