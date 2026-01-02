@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,67 +12,24 @@ import {
   ExternalLink,
   Clock,
   History as HistoryIcon,
+  Loader2,
 } from "lucide-react";
-import type { Transaction } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-// Mock transaction data
-const mockTransactions: Transaction[] = [
-  {
-    id: "1",
-    type: "deposit",
-    asset: "ETH",
-    amount: "0.5",
-    sender: "0x1234...5678",
-    timestamp: new Date(Date.now() - 1000 * 60 * 30),
-    txHash: "0xabc123def456789...",
-    status: "confirmed",
-  },
-  {
-    id: "2",
-    type: "withdrawal",
-    asset: "USDC",
-    amount: "100.00",
-    recipient: "0xabcd...efgh",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
-    txHash: "0xdef456abc789012...",
-    status: "confirmed",
-  },
-  {
-    id: "3",
-    type: "deposit",
-    asset: "USDT",
-    amount: "250.00",
-    sender: "0x9876...5432",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24),
-    txHash: "0x789012def456abc...",
-    status: "confirmed",
-  },
-  {
-    id: "4",
-    type: "withdrawal",
-    asset: "ETH",
-    amount: "0.25",
-    recipient: "0xijkl...mnop",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48),
-    txHash: "0x012345678abcdef...",
-    status: "confirmed",
-  },
-  {
-    id: "5",
-    type: "deposit",
-    asset: "DAI",
-    amount: "500.00",
-    sender: "0xqrst...uvwx",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 72),
-    txHash: "0xfedcba987654321...",
-    status: "pending",
-  },
-];
+import { useWalletSession } from "@/hooks/use-wallet-session";
+import {
+  useTransactionHistory,
+  getExplorerUrl,
+  type Transaction,
+} from "@/hooks/use-transaction-history";
 
 function TransactionRow({ tx }: { tx: Transaction }) {
   const isDeposit = tx.type === "deposit";
   const timeAgo = getTimeAgo(tx.timestamp);
+
+  const truncateAddress = (addr: string) => {
+    if (addr.length <= 13) return addr;
+    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  };
 
   return (
     <div className="flex items-center justify-between rounded-lg p-4 transition-colors hover:bg-muted/20">
@@ -96,21 +54,21 @@ function TransactionRow({ tx }: { tx: Transaction }) {
             <span className="text-muted-foreground">{tx.asset}</span>
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>{isDeposit ? `From: ${tx.sender}` : `To: ${tx.recipient}`}</span>
+            <span>
+              {isDeposit
+                ? `From: ${truncateAddress(tx.address)}`
+                : `To: ${truncateAddress(tx.address)}`}
+            </span>
           </div>
         </div>
       </div>
       <div className="flex items-center gap-4">
         <div className="text-right">
           <Badge
-            variant={tx.status === "confirmed" ? "default" : "secondary"}
-            className={cn(
-              tx.status === "confirmed"
-                ? "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
-                : "bg-chart-4/10 text-chart-4"
-            )}
+            variant="default"
+            className="bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20"
           >
-            {tx.status === "confirmed" ? "Confirmed" : "Pending"}
+            Confirmed
           </Badge>
           <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
             <Clock className="h-3 w-3" />
@@ -121,7 +79,7 @@ function TransactionRow({ tx }: { tx: Transaction }) {
           variant="ghost"
           size="icon"
           className="h-8 w-8"
-          onClick={() => window.open(`https://sepolia.basescan.org/tx/${tx.txHash}`, "_blank")}
+          onClick={() => window.open(getExplorerUrl(tx.txHash), "_blank")}
         >
           <ExternalLink className="h-4 w-4" />
         </Button>
@@ -140,16 +98,32 @@ function getTimeAgo(date: Date): string {
 }
 
 export default function History() {
+  const navigate = useNavigate();
+  const { session, isLoading: sessionLoading, isConnected } = useWalletSession();
+  const { data: transactions, isLoading: txLoading } = useTransactionHistory(
+    session?.credentialIdHex
+  );
   const [filter, setFilter] = useState<"all" | "deposits" | "withdrawals">("all");
 
-  const filteredTransactions = mockTransactions.filter((tx) => {
-    if (filter === "all") return true;
-    if (filter === "deposits") return tx.type === "deposit";
-    return tx.type === "withdrawal";
-  });
+  // Redirect if not connected
+  useEffect(() => {
+    if (!sessionLoading && !isConnected) {
+      navigate("/register");
+    }
+  }, [sessionLoading, isConnected, navigate]);
 
-  const depositCount = mockTransactions.filter((tx) => tx.type === "deposit").length;
-  const withdrawalCount = mockTransactions.filter((tx) => tx.type === "withdrawal").length;
+  const filteredTransactions =
+    transactions?.filter((tx) => {
+      if (filter === "all") return true;
+      if (filter === "deposits") return tx.type === "deposit";
+      return tx.type === "withdrawal";
+    }) ?? [];
+
+  const depositCount = transactions?.filter((tx) => tx.type === "deposit").length ?? 0;
+  const withdrawalCount = transactions?.filter((tx) => tx.type === "withdrawal").length ?? 0;
+  const totalCount = transactions?.length ?? 0;
+
+  const isLoading = sessionLoading || txLoading;
 
   return (
     <PageContainer>
@@ -167,7 +141,7 @@ export default function History() {
             <Tabs defaultValue="all" className="w-full">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="all" onClick={() => setFilter("all")}>
-                  All ({mockTransactions.length})
+                  All ({totalCount})
                 </TabsTrigger>
                 <TabsTrigger value="deposits" onClick={() => setFilter("deposits")}>
                   Deposits ({depositCount})
@@ -179,7 +153,11 @@ export default function History() {
             </Tabs>
           </CardHeader>
           <CardContent className="pt-4">
-            {filteredTransactions.length > 0 ? (
+            {isLoading ? (
+              <div className="flex h-48 items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : filteredTransactions.length > 0 ? (
               <div className="divide-y divide-border">
                 {filteredTransactions.map((tx) => (
                   <TransactionRow key={tx.id} tx={tx} />

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Copy, Check, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface CredentialIdDisplayProps {
   credentialId: string;
@@ -22,10 +22,7 @@ export function CredentialIdDisplay({
   const handleCopy = async () => {
     await navigator.clipboard.writeText(credentialId);
     setCopied(true);
-    toast({
-      title: "Copied!",
-      description: "Credential ID copied to clipboard",
-    });
+    toast.success("Copied to clipboard");
     setTimeout(() => setCopied(false), 2000);
   };
 

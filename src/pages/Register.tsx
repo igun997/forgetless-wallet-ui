@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,59 +8,38 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { TransactionStatus } from "@/components/wallet/TransactionStatus";
 import { CredentialIdDisplay } from "@/components/wallet/CredentialIdDisplay";
 import { Fingerprint, ArrowRight, CheckCircle2 } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
-
-type RegistrationStep = "input" | "creating" | "confirming" | "success";
+import { useRegister } from "@/hooks/use-register";
+import { useWalletSession } from "@/hooks/use-wallet-session";
 
 export default function Register() {
   const navigate = useNavigate();
   const [displayName, setDisplayName] = useState("");
-  const [step, setStep] = useState<RegistrationStep>("input");
-  const [credentialId, setCredentialId] = useState("");
   const [error, setError] = useState("");
+  const { session, isConnected } = useWalletSession();
+  const registerMutation = useRegister();
 
-  const handleCreatePasskey = async () => {
+  // Redirect if already registered
+  useEffect(() => {
+    if (isConnected) {
+      navigate("/dashboard");
+    }
+  }, [isConnected, navigate]);
+
+  const handleCreatePasskey = () => {
     if (!displayName.trim()) {
       setError("Please enter a display name");
       return;
     }
-
-    setStep("creating");
     setError("");
-
-    // Simulate WebAuthn passkey creation
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      // Mock credential ID generation
-      const mockCredentialId =
-        "0x" +
-        Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
-
-      setCredentialId(mockCredentialId);
-      setStep("confirming");
-
-      // Simulate transaction confirmation
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      // Store credential in localStorage
-      localStorage.setItem("forgetless_credential", mockCredentialId);
-      localStorage.setItem("forgetless_displayName", displayName);
-
-      setStep("success");
-      toast({
-        title: "Wallet Created!",
-        description: "Your passkey wallet has been registered successfully.",
-      });
-    } catch {
-      setStep("input");
-      setError("Failed to create passkey. Please try again.");
-    }
+    registerMutation.mutate(displayName);
   };
 
   const handleContinue = () => {
     navigate("/dashboard");
   };
+
+  const isSuccess = registerMutation.isSuccess;
+  const isPending = registerMutation.isPending;
 
   return (
     <PageContainer maxWidth="sm">
@@ -73,7 +52,7 @@ export default function Register() {
           <CardDescription>Register a new passkey to secure your wallet</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {step === "input" && (
+          {!isPending && !isSuccess && (
             <>
               <div className="space-y-2">
                 <Label htmlFor="displayName">Display Name</Label>
@@ -83,6 +62,7 @@ export default function Register() {
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="My Forgetless Wallet"
                   className={error ? "border-destructive" : ""}
+                  disabled={isPending}
                 />
                 {error && <p className="text-xs text-destructive">{error}</p>}
                 <p className="text-xs text-muted-foreground">
@@ -114,22 +94,23 @@ export default function Register() {
                 </ul>
               </div>
 
-              <Button className="w-full gap-2" size="lg" onClick={() => void handleCreatePasskey()}>
+              <Button
+                className="w-full gap-2"
+                size="lg"
+                onClick={handleCreatePasskey}
+                disabled={isPending}
+              >
                 <Fingerprint className="h-5 w-5" />
                 Create Passkey
               </Button>
             </>
           )}
 
-          {step === "creating" && (
-            <TransactionStatus status="loading" message="Waiting for biometric authentication..." />
+          {isPending && (
+            <TransactionStatus status="loading" message="Creating and registering your wallet..." />
           )}
 
-          {step === "confirming" && (
-            <TransactionStatus status="loading" message="Confirming registration on-chain..." />
-          )}
-
-          {step === "success" && (
+          {isSuccess && session && (
             <div className="space-y-6">
               <div className="flex flex-col items-center gap-4 py-4">
                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10">
@@ -140,7 +121,7 @@ export default function Register() {
                     Wallet Created Successfully!
                   </h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Your passkey has been registered
+                    Your passkey has been registered on-chain
                   </p>
                 </div>
               </div>
@@ -150,7 +131,7 @@ export default function Register() {
                 <p className="mb-2 text-xs text-muted-foreground">
                   Share this ID to receive deposits
                 </p>
-                <CredentialIdDisplay credentialId={credentialId} showQR />
+                <CredentialIdDisplay credentialId={session.credentialIdHex} showQR />
               </div>
 
               <Button className="w-full gap-2" size="lg" onClick={handleContinue}>

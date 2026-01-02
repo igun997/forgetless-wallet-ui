@@ -8,10 +8,10 @@ import { AmountInput } from "@/components/wallet/AmountInput";
 import { TokenSelector } from "@/components/wallet/TokenSelector";
 import { TransactionStatus } from "@/components/wallet/TransactionStatus";
 import { ArrowDownLeft, AlertCircle, CheckCircle2 } from "lucide-react";
-import { SUPPORTED_TOKENS, type Token } from "@/lib/constants";
-import { toast } from "@/hooks/use-toast";
-
-type DepositStatus = "idle" | "validating" | "approving" | "depositing" | "success" | "error";
+import { SUPPORTED_TOKENS, type Token, CURRENT_NETWORK } from "@/lib/constants";
+import { toast } from "sonner";
+import { useIsUserRegistered } from "@/hooks/use-contract-read";
+import { useDepositETH, useDepositToken } from "@/hooks/use-deposit";
 
 export default function Deposit() {
   const [credentialId, setCredentialId] = useState("");
@@ -20,105 +20,64 @@ export default function Deposit() {
   const [selectedToken, setSelectedToken] = useState<Token | { address: string; symbol: string }>(
     SUPPORTED_TOKENS[1] // USDC default
   );
-  const [status, setStatus] = useState<DepositStatus>("idle");
-  const [credentialValid, setCredentialValid] = useState<boolean | null>(null);
-  const [needsApproval, setNeedsApproval] = useState(true);
-  const [txHash, setTxHash] = useState("");
 
-  const validateCredential = async (id: string) => {
-    if (id.length < 10) {
-      setCredentialValid(null);
-      return;
-    }
-    setStatus("validating");
-    await new Promise((r) => setTimeout(r, 500));
-    // Mock validation - in real app would call isUserRegistered()
-    setCredentialValid(id.startsWith("0x") && id.length === 66);
-    setStatus("idle");
-  };
+  const credentialIdHex = credentialId.startsWith("0x")
+    ? (credentialId as `0x${string}`)
+    : undefined;
+
+  const { data: isRegistered, isLoading: isValidating } = useIsUserRegistered(
+    credentialIdHex && credentialId.length >= 66 ? credentialIdHex : undefined
+  );
+
+  const depositETHMutation = useDepositETH();
+  const depositTokenMutation = useDepositToken();
+
+  const credentialValid = credentialIdHex && credentialId.length === 66 ? isRegistered : null;
+  const isProcessing = depositETHMutation.isPending || depositTokenMutation.isPending;
 
   const handleCredentialChange = (value: string) => {
     setCredentialId(value);
-    void validateCredential(value);
   };
 
-  const handleDepositETH = async () => {
-    if (!credentialValid) {
-      toast({
-        title: "Invalid Credential",
-        description: "Please enter a valid credential ID",
-        variant: "destructive",
-      });
+  const handleDepositETH = () => {
+    if (!credentialValid || !credentialIdHex) {
+      toast.error("Invalid Credential", { description: "Please enter a valid credential ID" });
       return;
     }
     if (!ethAmount || parseFloat(ethAmount) <= 0) {
-      toast({
-        title: "Invalid Amount",
-        description: "Please enter a valid amount",
-        variant: "destructive",
-      });
+      toast.error("Invalid Amount", { description: "Please enter a valid amount" });
       return;
     }
 
-    setStatus("depositing");
-    await new Promise((r) => setTimeout(r, 2000));
-
-    const mockTx =
-      "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
-    setTxHash(mockTx);
-    setStatus("success");
-    toast({ title: "Deposit Successful", description: `${ethAmount} ETH deposited successfully` });
+    depositETHMutation.mutate({ credentialIdHex, amount: ethAmount });
   };
 
-  const handleApprove = async () => {
-    setStatus("approving");
-    await new Promise((r) => setTimeout(r, 1500));
-    setNeedsApproval(false);
-    setStatus("idle");
-    toast({ title: "Approval Successful", description: "Token spending approved" });
-  };
-
-  const handleDepositToken = async () => {
-    if (!credentialValid) {
-      toast({
-        title: "Invalid Credential",
-        description: "Please enter a valid credential ID",
-        variant: "destructive",
-      });
+  const handleDepositToken = () => {
+    if (!credentialValid || !credentialIdHex) {
+      toast.error("Invalid Credential", { description: "Please enter a valid credential ID" });
       return;
     }
     if (!tokenAmount || parseFloat(tokenAmount) <= 0) {
-      toast({
-        title: "Invalid Amount",
-        description: "Please enter a valid amount",
-        variant: "destructive",
-      });
+      toast.error("Invalid Amount", { description: "Please enter a valid amount" });
       return;
     }
 
-    if (needsApproval) {
-      await handleApprove();
-    }
+    const tokenAddress = ("address" in selectedToken ? selectedToken.address : "") as `0x${string}`;
+    const decimals = "decimals" in selectedToken ? selectedToken.decimals : 18;
 
-    setStatus("depositing");
-    await new Promise((r) => setTimeout(r, 2000));
-
-    const mockTx =
-      "0x" + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
-    setTxHash(mockTx);
-    setStatus("success");
-    toast({
-      title: "Deposit Successful",
-      description: `${tokenAmount} ${selectedToken.symbol} deposited successfully`,
+    depositTokenMutation.mutate({
+      credentialIdHex,
+      tokenAddress,
+      amount: tokenAmount,
+      decimals,
     });
   };
 
   const resetForm = () => {
-    setStatus("idle");
+    depositETHMutation.reset();
+    depositTokenMutation.reset();
     setEthAmount("");
     setTokenAmount("");
-    setTxHash("");
-    setNeedsApproval(true);
   };
 
   return (
@@ -149,19 +108,21 @@ export default function Deposit() {
                 label=""
                 placeholder="0x..."
               />
-              {credentialValid !== null && (
+              {credentialId.length >= 66 && (
                 <div className="mt-2 flex items-center gap-2 text-sm">
-                  {credentialValid ? (
+                  {isValidating ? (
+                    <span className="text-muted-foreground">Checking...</span>
+                  ) : credentialValid ? (
                     <>
                       <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                       <span className="text-emerald-500">Credential is registered</span>
                     </>
-                  ) : (
+                  ) : credentialValid === false ? (
                     <>
                       <AlertCircle className="h-4 w-4 text-destructive" />
                       <span className="text-destructive">Credential not found</span>
                     </>
-                  )}
+                  ) : null}
                 </div>
               )}
             </div>
@@ -182,7 +143,7 @@ export default function Deposit() {
 
               <div className="p-6">
                 <TabsContent value="eth" className="mt-0 space-y-6">
-                  {status === "idle" || status === "validating" ? (
+                  {!isProcessing && !depositETHMutation.isSuccess ? (
                     <>
                       <AmountInput
                         value={ethAmount}
@@ -194,8 +155,8 @@ export default function Deposit() {
                       <Button
                         className="w-full"
                         size="lg"
-                        onClick={() => void handleDepositETH()}
-                        disabled={!credentialValid || !ethAmount}
+                        onClick={handleDepositETH}
+                        disabled={!credentialValid || !ethAmount || isProcessing}
                       >
                         Deposit ETH
                       </Button>
@@ -204,17 +165,24 @@ export default function Deposit() {
                     <div className="space-y-4">
                       <TransactionStatus
                         status={
-                          status === "depositing"
+                          depositETHMutation.isPending
                             ? "loading"
-                            : status === "success"
+                            : depositETHMutation.isSuccess
                               ? "success"
                               : "error"
                         }
-                        txHash={txHash}
-                        message={status === "depositing" ? "Processing ETH deposit..." : undefined}
+                        txHash={depositETHMutation.data?.txHash}
+                        explorerUrl={
+                          depositETHMutation.data?.txHash
+                            ? `${CURRENT_NETWORK.explorer}/tx/${depositETHMutation.data.txHash}`
+                            : undefined
+                        }
+                        message={
+                          depositETHMutation.isPending ? "Processing ETH deposit..." : undefined
+                        }
                         onRetry={resetForm}
                       />
-                      {status === "success" && (
+                      {depositETHMutation.isSuccess && (
                         <Button variant="outline" className="w-full" onClick={resetForm}>
                           Make Another Deposit
                         </Button>
@@ -224,7 +192,7 @@ export default function Deposit() {
                 </TabsContent>
 
                 <TabsContent value="token" className="mt-0 space-y-6">
-                  {status === "idle" || status === "validating" ? (
+                  {!isProcessing && !depositTokenMutation.isSuccess ? (
                     <>
                       <TokenSelector
                         value={"address" in selectedToken ? selectedToken.address : ""}
@@ -238,47 +206,36 @@ export default function Deposit() {
                         symbol={selectedToken.symbol}
                         label="Amount"
                       />
-                      <div className="flex gap-3">
-                        {needsApproval && (
-                          <Button
-                            variant="outline"
-                            className="flex-1"
-                            onClick={() => void handleApprove()}
-                            disabled={!credentialValid || !tokenAmount}
-                          >
-                            Approve {selectedToken.symbol}
-                          </Button>
-                        )}
-                        <Button
-                          className="flex-1"
-                          onClick={() => void handleDepositToken()}
-                          disabled={!credentialValid || !tokenAmount || needsApproval}
-                        >
-                          Deposit {selectedToken.symbol}
-                        </Button>
-                      </div>
+                      <Button
+                        className="w-full"
+                        onClick={handleDepositToken}
+                        disabled={!credentialValid || !tokenAmount || isProcessing}
+                      >
+                        Deposit {selectedToken.symbol}
+                      </Button>
                     </>
                   ) : (
                     <div className="space-y-4">
                       <TransactionStatus
                         status={
-                          status === "approving" || status === "depositing"
+                          depositTokenMutation.isPending
                             ? "loading"
-                            : status === "success"
+                            : depositTokenMutation.isSuccess
                               ? "success"
                               : "error"
                         }
-                        txHash={txHash}
+                        txHash={depositTokenMutation.data?.txHash}
+                        explorerUrl={
+                          depositTokenMutation.data?.txHash
+                            ? `${CURRENT_NETWORK.explorer}/tx/${depositTokenMutation.data.txHash}`
+                            : undefined
+                        }
                         message={
-                          status === "approving"
-                            ? "Approving token spending..."
-                            : status === "depositing"
-                              ? "Processing token deposit..."
-                              : undefined
+                          depositTokenMutation.isPending ? "Processing token deposit..." : undefined
                         }
                         onRetry={resetForm}
                       />
-                      {status === "success" && (
+                      {depositTokenMutation.isSuccess && (
                         <Button variant="outline" className="w-full" onClick={resetForm}>
                           Make Another Deposit
                         </Button>

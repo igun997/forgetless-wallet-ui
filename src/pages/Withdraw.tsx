@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -14,11 +15,12 @@ import { AddressInput } from "@/components/wallet/AddressInput";
 import { AmountInput } from "@/components/wallet/AmountInput";
 import { TokenSelector } from "@/components/wallet/TokenSelector";
 import { TransactionStatus } from "@/components/wallet/TransactionStatus";
-import { ArrowUpRight, Fingerprint, Clock, AlertTriangle } from "lucide-react";
-import { SUPPORTED_TOKENS, type Token } from "@/lib/constants";
-import { toast } from "@/hooks/use-toast";
-
-type WithdrawStatus = "idle" | "signing" | "submitting" | "success" | "error";
+import { ArrowUpRight, Fingerprint, Clock, AlertTriangle, Loader2 } from "lucide-react";
+import { SUPPORTED_TOKENS, type Token, CURRENT_NETWORK } from "@/lib/constants";
+import { toast } from "sonner";
+import { useWalletSession } from "@/hooks/use-wallet-session";
+import { useAllBalances, useUserNonce } from "@/hooks/use-contract-read";
+import { useWithdrawETH, useWithdrawToken } from "@/hooks/use-withdraw";
 
 const DEADLINES = [
   { value: "3600", label: "1 hour" },
@@ -26,90 +28,107 @@ const DEADLINES = [
   { value: "86400", label: "24 hours" },
 ];
 
-// Mock balances
-const mockBalances: Record<string, string> = {
-  "0x0000000000000000000000000000000000000000": "1.2345",
-  "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913": "500.00",
-  "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2": "250.00",
-  "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb": "100.00",
-  "0x4200000000000000000000000000000000000006": "0.5",
-};
-
 export default function Withdraw() {
+  const navigate = useNavigate();
+  const {
+    session,
+    isLoading: sessionLoading,
+    isConnected,
+    getCredentialIdBytes,
+  } = useWalletSession();
+  const { data: balances, isLoading: balancesLoading } = useAllBalances(session?.credentialIdHex);
+  const { data: nonce } = useUserNonce(session?.credentialIdHex);
+
   const [selectedToken, setSelectedToken] = useState<Token | { address: string; symbol: string }>(
     SUPPORTED_TOKENS[0] // ETH default
   );
   const [amount, setAmount] = useState("");
   const [recipient, setRecipient] = useState("");
   const [deadline, setDeadline] = useState("3600");
-  const [status, setStatus] = useState<WithdrawStatus>("idle");
-  const [txHash, setTxHash] = useState("");
-  const [currentNonce, setCurrentNonce] = useState(0);
+
+  const withdrawETHMutation = useWithdrawETH();
+  const withdrawTokenMutation = useWithdrawToken();
+
+  // Redirect if not connected
+  useEffect(() => {
+    if (!sessionLoading && !isConnected) {
+      navigate("/register");
+    }
+  }, [sessionLoading, isConnected, navigate]);
 
   const tokenAddress = "address" in selectedToken ? selectedToken.address : "";
-  const maxBalance = mockBalances[tokenAddress] || "0";
+  const isETH = tokenAddress === "0x0000000000000000000000000000000000000000";
+
+  // Find balance for selected token
+  const selectedBalance = balances?.find(
+    (b) => b.address.toLowerCase() === tokenAddress.toLowerCase()
+  );
+  const maxBalance = selectedBalance?.formatted ?? "0";
 
   const isValidRecipient = /^0x[a-fA-F0-9]{40}$/.test(recipient);
   const isValidAmount = parseFloat(amount) > 0 && parseFloat(amount) <= parseFloat(maxBalance);
 
-  const handleWithdraw = async () => {
+  const isProcessing = withdrawETHMutation.isPending || withdrawTokenMutation.isPending;
+  const isSuccess = withdrawETHMutation.isSuccess || withdrawTokenMutation.isSuccess;
+  const txHash = withdrawETHMutation.data?.txHash ?? withdrawTokenMutation.data?.txHash;
+
+  const handleWithdraw = () => {
     if (!isValidRecipient) {
-      toast({
-        title: "Invalid Recipient",
-        description: "Please enter a valid address",
-        variant: "destructive",
-      });
+      toast.error("Invalid Recipient", { description: "Please enter a valid address" });
       return;
     }
     if (!isValidAmount) {
-      toast({
-        title: "Invalid Amount",
-        description: "Please enter a valid amount",
-        variant: "destructive",
-      });
+      toast.error("Invalid Amount", { description: "Please enter a valid amount" });
+      return;
+    }
+    if (!session || nonce === undefined) {
+      toast.error("Wallet not ready", { description: "Please wait for wallet to load" });
       return;
     }
 
-    // Step 1: Sign with passkey
-    setStatus("signing");
-    toast({
-      title: "Passkey Required",
-      description: "Please authenticate with your passkey",
-    });
+    const credentialId = getCredentialIdBytes();
+    if (!credentialId) {
+      toast.error("No credential found");
+      return;
+    }
 
-    try {
-      await new Promise((r) => setTimeout(r, 2000));
+    const commonParams = {
+      credentialId,
+      credentialIdHex: session.credentialIdHex,
+      amount,
+      recipient: recipient as `0x${string}`,
+      nonce,
+      deadlineSeconds: parseInt(deadline),
+    };
 
-      // Step 2: Submit transaction
-      setStatus("submitting");
-      await new Promise((r) => setTimeout(r, 2000));
-
-      const mockTx =
-        "0x" +
-        Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
-      setTxHash(mockTx);
-      setCurrentNonce((n) => n + 1);
-      setStatus("success");
-      toast({
-        title: "Withdrawal Successful",
-        description: `${amount} ${selectedToken.symbol} sent to ${recipient.slice(0, 8)}...`,
-      });
-    } catch {
-      setStatus("error");
-      toast({
-        title: "Withdrawal Failed",
-        description: "Please try again",
-        variant: "destructive",
+    if (isETH) {
+      withdrawETHMutation.mutate(commonParams);
+    } else {
+      const decimals = "decimals" in selectedToken ? selectedToken.decimals : 18;
+      withdrawTokenMutation.mutate({
+        ...commonParams,
+        tokenAddress: tokenAddress as `0x${string}`,
+        decimals,
       });
     }
   };
 
   const resetForm = () => {
-    setStatus("idle");
+    withdrawETHMutation.reset();
+    withdrawTokenMutation.reset();
     setAmount("");
     setRecipient("");
-    setTxHash("");
   };
+
+  if (sessionLoading) {
+    return (
+      <PageContainer maxWidth="md">
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer maxWidth="md">
@@ -128,7 +147,7 @@ export default function Withdraw() {
             <CardDescription>Select an asset and enter the recipient address</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {status === "idle" ? (
+            {!isProcessing && !isSuccess ? (
               <>
                 <TokenSelector
                   value={tokenAddress}
@@ -148,6 +167,10 @@ export default function Withdraw() {
                       : undefined
                   }
                 />
+
+                {balancesLoading && (
+                  <p className="text-xs text-muted-foreground">Loading balance...</p>
+                )}
 
                 <AddressInput
                   value={recipient}
@@ -191,8 +214,8 @@ export default function Withdraw() {
                 <Button
                   className="w-full gap-2"
                   size="lg"
-                  onClick={() => void handleWithdraw()}
-                  disabled={!isValidRecipient || !isValidAmount}
+                  onClick={handleWithdraw}
+                  disabled={!isValidRecipient || !isValidAmount || isProcessing}
                 >
                   <Fingerprint className="h-5 w-5" />
                   Sign with Passkey
@@ -200,25 +223,20 @@ export default function Withdraw() {
 
                 <div className="flex justify-center">
                   <span className="text-xs text-muted-foreground">
-                    Current nonce: {currentNonce}
+                    Current nonce: {nonce !== undefined ? String(nonce) : "-"}
                   </span>
                 </div>
               </>
             ) : (
               <div className="space-y-4">
                 <TransactionStatus
-                  status={status === "signing" || status === "submitting" ? "loading" : status}
+                  status={isProcessing ? "loading" : isSuccess ? "success" : "error"}
                   txHash={txHash}
-                  message={
-                    status === "signing"
-                      ? "Waiting for passkey authentication..."
-                      : status === "submitting"
-                        ? "Submitting transaction..."
-                        : undefined
-                  }
+                  explorerUrl={txHash ? `${CURRENT_NETWORK.explorer}/tx/${txHash}` : undefined}
+                  message={isProcessing ? "Sign with your passkey and confirm..." : undefined}
                   onRetry={resetForm}
                 />
-                {status === "success" && (
+                {isSuccess && (
                   <Button variant="outline" className="w-full" onClick={resetForm}>
                     Make Another Withdrawal
                   </Button>

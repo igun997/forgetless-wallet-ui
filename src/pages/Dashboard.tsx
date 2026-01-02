@@ -1,49 +1,70 @@
-import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { CredentialIdDisplay } from "@/components/wallet/CredentialIdDisplay";
 import { BalanceCard } from "@/components/wallet/BalanceCard";
-import { ArrowDownLeft, ArrowUpRight, History, Plus, Wallet, RefreshCw } from "lucide-react";
-
-// Mock balances for UI display
-const mockBalances = [
-  { symbol: "ETH", name: "Ethereum", balance: "1.2345", usdValue: "2,469.00", change24h: 2.34 },
-  { symbol: "USDC", name: "USD Coin", balance: "500.00", usdValue: "500.00", change24h: 0.01 },
-  { symbol: "USDT", name: "Tether USD", balance: "250.00", usdValue: "250.00", change24h: -0.02 },
-  { symbol: "DAI", name: "Dai Stablecoin", balance: "100.00", usdValue: "100.00", change24h: 0.0 },
-];
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  History,
+  Plus,
+  Wallet,
+  RefreshCw,
+  Loader2,
+} from "lucide-react";
+import { useWalletSession } from "@/hooks/use-wallet-session";
+import { useAllBalances, useUserNonce } from "@/hooks/use-contract-read";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function Dashboard() {
-  const [credentialId, setCredentialId] = useState<string>("");
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { session, isLoading: sessionLoading, isConnected } = useWalletSession();
+  const {
+    data: balances,
+    isLoading: balancesLoading,
+    isRefetching,
+  } = useAllBalances(session?.credentialIdHex);
+  const { data: nonce } = useUserNonce(session?.credentialIdHex);
 
+  // Redirect if not connected
   useEffect(() => {
-    // Load credential from localStorage
-    const stored = localStorage.getItem("forgetless_credential");
-    if (stored) {
-      setCredentialId(stored);
-    } else {
-      // Generate a mock credential for demo
-      const mock =
-        "0x" +
-        Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
-      setCredentialId(mock);
-      localStorage.setItem("forgetless_credential", mock);
+    if (!sessionLoading && !isConnected) {
+      navigate("/register");
     }
-  }, []);
+  }, [sessionLoading, isConnected, navigate]);
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setIsRefreshing(false);
+  const handleRefresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ["allBalances"] });
+    void queryClient.invalidateQueries({ queryKey: ["userNonce"] });
   };
 
-  const totalUsdValue = mockBalances.reduce(
-    (sum, b) => sum + parseFloat(b.usdValue.replace(",", "")),
-    0
-  );
+  // Calculate total USD value (mock pricing for now)
+  const totalUsdValue =
+    balances?.reduce((sum, token) => {
+      const balance = parseFloat(token.formatted);
+      // Mock USD prices
+      const prices: Record<string, number> = {
+        ETH: 2000,
+        USDC: 1,
+        USDT: 1,
+        DAI: 1,
+      };
+      const price = prices[token.symbol] ?? 0;
+      return sum + balance * price;
+    }, 0) ?? 0;
+
+  if (sessionLoading) {
+    return (
+      <PageContainer>
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer>
@@ -52,15 +73,16 @@ export default function Dashboard() {
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-            <p className="text-muted-foreground">Manage your Forgetless Wallet</p>
+            <p className="text-muted-foreground">{session?.displayName ?? "Forgetless Wallet"}</p>
           </div>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => void handleRefresh()}
+            onClick={handleRefresh}
+            disabled={isRefetching}
             className="gap-2 self-start sm:self-auto"
           >
-            <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
             Refresh
           </Button>
         </div>
@@ -71,10 +93,13 @@ export default function Dashboard() {
             <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
               <div>
                 <p className="mb-1 text-sm text-muted-foreground">Total Balance</p>
-                <h2 className="text-4xl font-bold text-foreground">
-                  ${totalUsdValue.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                </h2>
-                <p className="mt-1 text-sm text-emerald-500">+$45.32 (1.38%) today</p>
+                {balancesLoading ? (
+                  <div className="h-10 w-32 animate-pulse rounded bg-muted" />
+                ) : (
+                  <h2 className="text-4xl font-bold text-foreground">
+                    ${totalUsdValue.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                  </h2>
+                )}
               </div>
               <div className="flex gap-3">
                 <Link to="/deposit">
@@ -105,16 +130,29 @@ export default function Dashboard() {
               </Button>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              {mockBalances.map((token) => (
-                <BalanceCard
-                  key={token.symbol}
-                  symbol={token.symbol}
-                  name={token.name}
-                  balance={token.balance}
-                  usdValue={token.usdValue}
-                  change24h={token.change24h}
-                />
-              ))}
+              {balancesLoading
+                ? Array.from({ length: 4 }).map((_, i) => (
+                    <Card key={i} className="border-border/50">
+                      <CardContent className="p-4">
+                        <div className="h-16 animate-pulse rounded bg-muted" />
+                      </CardContent>
+                    </Card>
+                  ))
+                : balances?.map((token) => {
+                    const prices: Record<string, number> = { ETH: 2000, USDC: 1, USDT: 1, DAI: 1 };
+                    const price = prices[token.symbol] ?? 0;
+                    const usdValue = parseFloat(token.formatted) * price;
+                    return (
+                      <BalanceCard
+                        key={token.symbol}
+                        symbol={token.symbol}
+                        name={token.name}
+                        balance={token.formatted}
+                        usdValue={usdValue.toFixed(2)}
+                        change24h={0}
+                      />
+                    );
+                  })}
             </div>
           </div>
 
@@ -128,7 +166,7 @@ export default function Dashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <CredentialIdDisplay credentialId={credentialId} showQR />
+                {session && <CredentialIdDisplay credentialId={session.credentialIdHex} showQR />}
               </CardContent>
             </Card>
 
@@ -164,7 +202,9 @@ export default function Dashboard() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Current Nonce</span>
-                  <span className="font-mono text-sm text-foreground">0</span>
+                  <span className="font-mono text-sm text-foreground">
+                    {nonce !== undefined ? String(nonce) : "-"}
+                  </span>
                 </div>
               </CardContent>
             </Card>
