@@ -1,73 +1,93 @@
-# Welcome to your Lovable project
+# Forgetless Wallet UI
 
-## Project info
+A modern, passkey-based crypto wallet interface built on Base Sepolia. Forgetless Wallet uses WebAuthn passkeys for secure, passwordless authentication and transaction signing.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Features
 
-## How can I edit this code?
+- **Passkey Authentication** - Secure wallet creation and transaction signing using WebAuthn biometrics
+- **Multi-Asset Support** - ETH, USDC, USDT, DAI, and WETH
+- **Deposit & Withdraw** - Send and receive funds with credential-based routing
+- **Transaction History** - View all deposits and withdrawals with status tracking
+- **Dark Mode** - Glacier-themed UI with full dark mode support
+- **Responsive Design** - Mobile-first design that works on all devices
 
-There are several ways of editing your application.
+## Tech Stack
 
-**Use Lovable**
+- **Framework**: React 18 + TypeScript
+- **Build Tool**: Vite
+- **Styling**: Tailwind CSS + shadcn/ui
+- **Routing**: React Router
+- **Forms**: React Hook Form + Zod
+- **State**: TanStack Query
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Development
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
 
-**Use your preferred IDE**
+- [Bun](https://bun.sh/) (recommended) or Node.js 18+
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Setup
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+```bash
+# Clone the repository
+git clone https://github.com/forgetless/wallet-ui.git
+cd wallet-ui
 
-Follow these steps:
+# Install dependencies
+bun install
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+# Start development server
+bun run dev
 ```
 
-**Edit a file directly in GitHub**
+The app will be available at `http://localhost:8080`.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Scripts
 
-**Use GitHub Codespaces**
+| Command                | Description                  |
+| ---------------------- | ---------------------------- |
+| `bun run dev`          | Start development server     |
+| `bun run build`        | Build for production         |
+| `bun run preview`      | Preview production build     |
+| `bun run typecheck`    | Run TypeScript type checking |
+| `bun run lint`         | Run ESLint                   |
+| `bun run lint:fix`     | Run ESLint with auto-fix     |
+| `bun run format`       | Format code with Prettier    |
+| `bun run format:check` | Check code formatting        |
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### Code Quality
 
-## What technologies are used for this project?
+This project enforces strict code quality standards:
 
-This project is built with:
+- **TypeScript**: Maximum strict mode enabled
+- **ESLint**: Strict type-checked rules with Prettier integration
+- **Prettier**: Automatic code formatting with Tailwind class sorting
+- **Husky**: Pre-commit hooks run typecheck and lint-staged
+- **semantic-release**: Automated versioning based on conventional commits
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Project Structure
 
-## How can I deploy this project?
+```
+src/
+├── components/
+│   ├── layout/         # Header, Footer, PageContainer
+│   ├── ui/             # shadcn/ui components
+│   └── wallet/         # Wallet-specific components
+├── hooks/              # Custom React hooks
+├── lib/                # Utilities, constants, types
+└── pages/              # Route pages
+    ├── Landing.tsx     # Home page
+    ├── Register.tsx    # Wallet creation
+    ├── Dashboard.tsx   # Wallet overview
+    ├── Deposit.tsx     # Receive funds
+    ├── Withdraw.tsx    # Send funds
+    └── History.tsx     # Transaction history
+```
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+## Network
 
-## Can I connect a custom domain to my Lovable project?
+Currently configured for **Base Sepolia** testnet.
 
-Yes, you can!
+## License
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+MIT
