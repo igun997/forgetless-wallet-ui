@@ -25,7 +25,7 @@ export function Footer() {
               </a>
             </Button>
             <Button variant="ghost" size="icon" asChild>
-              <a href="https://docs.forgetless.wallet" target="_blank" rel="noopener noreferrer">
+              <a href="https://docs-wallet.enitip.com" target="_blank" rel="noopener noreferrer">
                 <BookOpen className="h-4 w-4" />
               </a>
             </Button>
